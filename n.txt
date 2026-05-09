@@ -1,0 +1,159 @@
+import re
+import hashlib
+import secrets
+import string
+
+class PasswordStrengthAnalyzer:
+    def __init__(self):
+        self.common_passwords = self._load_common_passwords()
+        self.old_passwords_db = set()  # Simulated database
+    
+    def _load_common_passwords(self):
+        """Load common passwords from a file or return a basic set"""
+        common = {'password', '123456', 'qwerty', 'letmein', 'welcome'}
+        # In production, load from a file like rockyou.txt
+        return common
+    
+    def analyze_strength(self, password):
+        """Comprehensive password strength analysis"""
+        if not password:
+            return {"score": 0, "feedback": ["Password cannot be empty"]}
+        
+        score = 0
+        feedback = []
+        
+        # Length check
+        length = len(password)
+        if length >= 12:
+            score += 2
+            feedback.append("✓ Good length (12+ characters)")
+        elif length >= 8:
+            score += 1
+            feedback.append("✓ Minimum length met (8 characters)")
+        else:
+            feedback.append("✗ Too short (minimum 8 characters required)")
+        
+        # Complexity checks
+        checks = {
+            'lowercase': r'[a-z]',
+            'uppercase': r'[A-Z]',
+            'digits': r'\d',
+            'special': r'[!@#$%^&*(),.?":{}|<>]'
+        }
+        
+        complexity_score = 0
+        for check_type, pattern in checks.items():
+            if re.search(pattern, password):
+                complexity_score += 1
+                feedback.append(f"✓ Contains {check_type} characters")
+            else:
+                feedback.append(f"✗ Missing {check_type} characters")
+        
+        if complexity_score >= 3:
+            score += 2
+        elif complexity_score >= 2:
+            score += 1
+        
+        # Common password check
+        if password.lower() in self.common_passwords:
+            score = max(0, score - 2)
+            feedback.append("✗ This is a very common password")
+        
+        # Sequential characters check
+        if self._has_sequential_chars(password):
+            score = max(0, score - 1)
+            feedback.append("✗ Avoid sequential characters (abc, 123, etc.)")
+        
+        # Dictionary words check
+        if self._contains_dictionary_word(password):
+            score = max(0, score - 1)
+            feedback.append("✗ Avoid complete dictionary words")
+        
+        # Overall assessment
+        strength_levels = {
+            0: "Very Weak",
+            1: "Weak", 
+            2: "Fair",
+            3: "Good",
+            4: "Strong",
+            5: "Very Strong"
+        }
+        
+        final_score = min(5, max(0, score))
+        
+        return {
+            "score": final_score,
+            "strength": strength_levels[final_score],
+            "feedback": feedback,
+            "length": length
+        }
+    
+    def generate_strong_password(self, length=12):
+        """Generate a cryptographically secure password"""
+        characters = string.ascii_letters + string.digits + "!@#$%^&*"
+        return ''.join(secrets.choice(characters) for _ in range(length))
+    
+    def suggest_improvements(self, password):
+        """Suggest specific improvements for a weak password"""
+        suggestions = []
+        
+        if len(password) < 8:
+            suggestions.append(f"Add {8-len(password)} more characters")
+        
+        if not re.search(r'[A-Z]', password):
+            suggestions.append("Add uppercase letters")
+        
+        if not re.search(r'\d', password):
+            suggestions.append("Add numbers")
+        
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+            suggestions.append("Add special characters (!@#$% etc.)")
+        
+        return suggestions
+    
+    def check_password_reuse(self, password):
+        """Check if password has been used before (database integration)"""
+        password_hash = hashlib.sha256(password.encode()).hexdigest()
+        if password_hash in self.old_passwords_db:
+            return True, "This password has been used before"
+        return False, "Password is unique"
+    
+    def add_to_old_passwords(self, password):
+        """Add password hash to the database"""
+        password_hash = hashlib.sha256(password.encode()).hexdigest()
+        self.old_passwords_db.add(password_hash)
+    
+    def _has_sequential_chars(self, password):
+        """Check for sequential characters"""
+        for i in range(len(password) - 2):
+            if (ord(password[i]) + 1 == ord(password[i+1]) and 
+                ord(password[i]) + 2 == ord(password[i+2])):
+                return True
+        return False
+    
+    def _contains_dictionary_word(self, password):
+        """Simple dictionary word check"""
+        common_words = {'password', 'admin', 'login', 'welcome', 'letmein'}
+        return any(word in password.lower() for word in common_words)
+
+# Example usage
+if __name__ == "__main__":
+    analyzer = PasswordStrengthAnalyzer()
+    
+    test_passwords = ["password", "123456", "Weak1!", "StrongPass123!", "Xy8@!kLp#2qM"]
+    
+    for pwd in test_passwords:
+        result = analyzer.analyze_strength(pwd)
+        print(f"\nPassword: {pwd}")
+        print(f"Strength: {result['strength']} ({result['score']}/5)")
+        print("Feedback:")
+        for item in result['feedback']:
+            print(f"  {item}")
+        
+        if result['score'] < 3:
+            suggestions = analyzer.suggest_improvements(pwd)
+            print("Suggestions:", ", ".join(suggestions))
+        
+        # Check reuse
+        reused, message = analyzer.check_password_reuse(pwd)
+        print(f"Reuse check: {message}")
